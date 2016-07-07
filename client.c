@@ -1,73 +1,57 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
-#include <string.h>
-#include <unistd.h>
+#include <netdb.h> 
 
-void ChiudiSocket(int sock)
+void error(const char *msg)
 {
-  close(sock);
-  return;
+    perror(msg);
+    exit(0);
 }
 
-int CreaSocket(char* Destinazione, int Porta)
+int main(int argc, char *argv[])
 {
-  struct sockaddr_in temp; 
-  struct hostent *h;
-  int sock;
-  int errore;
-  
-  //Assegnazione indirizzo
-  temp.sin_family=AF_INET;
-  temp.sin_port=htons(Porta);
-  h=gethostbyname(Destinazione);
-  if (h==0) 
-  {
-    printf("Gethostbyname fallito\n");
-    exit(1);
-  }
-  bcopy(h->h_addr,&temp.sin_addr,h->h_length);
-  //Creazione socket 
-  sock=socket(AF_INET,SOCK_STREAM,0);
-  //Controllo errore per compiere azioni
-  //opportune in caso di errore.
-  errore=connect(sock, (struct sockaddr*) &temp, sizeof(temp));
-  return sock;
+    int sockfd, portno, n;
+    struct sockaddr_in serv_addr;
+    struct hostent *server;
+
+    char buffer[256];
+    if (argc < 3) {
+       fprintf(stderr,"usage %s hostname port\n", argv[0]);
+       exit(0);
+    }
+    portno = atoi(argv[2]);
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) 
+        error("ERROR opening socket");
+    server = gethostbyname(argv[1]);
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host\n");
+        exit(0);
+    }
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, 
+         (char *)&serv_addr.sin_addr.s_addr,
+         server->h_length);
+    serv_addr.sin_port = htons(portno);
+    if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
+        error("ERROR connecting");
+    printf("Please enter the message: ");
+    bzero(buffer,256);
+    fgets(buffer,255,stdin);
+    n = write(sockfd,buffer,strlen(buffer));
+    if (n < 0) 
+         error("ERROR writing to socket");
+    bzero(buffer,256);
+    n = read(sockfd,buffer,255);
+    if (n < 0) 
+         error("ERROR reading from socket");
+    printf("%s\n",buffer);
+    close(sockfd);
+    return 0;
 }
-
-void SpedisciMessaggio(int sock, char* Messaggio)
-{
-  printf("Client: %s\n",Messaggio);
- 
-  if (write(sock,Messaggio,strlen(Messaggio))<0)
-  {
-    printf("Impossibile mandare il messaggio.\n");
-    ChiudiSocket(sock);
-    exit(1);
-  }  
-  printf("Messaggio spedito.\n");
-  return;
-}
-
-int main(int argc,char* argv[])
-{
-  int DescrittoreSocket;
-  
-  //Creo e connetto il socket
-  DescrittoreSocket=CreaSocket("127.0.0.1",1745);
-  
-  //Spedisco il messaggio voluto
-  if ((argc==2)&&(strcmp(argv[1],"exit")==0))
-    SpedisciMessaggio(DescrittoreSocket,"exit");
-  else
-    SpedisciMessaggio(DescrittoreSocket,"Un messaggiooooooooooooooooooooooooo");
-
-  //Chiudo il socket.
-  ChiudiSocket(DescrittoreSocket);
-
-  return 0;
-}
- 
